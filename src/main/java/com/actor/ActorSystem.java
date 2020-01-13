@@ -2,9 +2,7 @@ package com.actor;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
-import java.util.NoSuchElementException;
 
 public class ActorSystem {
 
@@ -13,11 +11,9 @@ public class ActorSystem {
     private int maxMailboxSize;
     private Map<String, Actor> actors;
     private ArrayList<Thread> threadPool;
-    private LinkedList<String> threadQueue;
 
     public ActorSystem(int maxThreads, int maxMailboxSize) {
         this.maxMailboxSize = maxMailboxSize;
-        threadQueue = new LinkedList<>();
         actors = new HashMap<>();
         threadPool = new ArrayList<>(maxThreads);
         isAlive = true;
@@ -45,6 +41,7 @@ public class ActorSystem {
             throw new ActorNotFound(id);
         }
         actor.Shutdown();
+        System.out.println("Actor removed " + id);
     }
 
     public synchronized void sendMessage(String id, Message msg)
@@ -54,7 +51,6 @@ public class ActorSystem {
             throw new ActorNotFound(id);
         }
         actor.SendMessage(msg);
-        threadQueue.addLast(id);
         notify();
     }
 
@@ -70,6 +66,17 @@ public class ActorSystem {
                 e.printStackTrace();
             }
         }
+        System.out.println("Shutdown complete");
+    }
+
+    private Actor getRunnableActor() {
+        // TODO: Randomize the order in which actor's are traversed, to avoid starvation.
+        for(Actor actor: actors.values()) {
+            if (actor.hasMessages()) {
+                return actor;
+            }
+        }
+        return null;
     }
 
     private class WorkerThread extends Thread {
@@ -81,27 +88,19 @@ public class ActorSystem {
         public void run() {
             try {
                 while (true) {
-                    String id;
+                    Actor actor = null;
                     synchronized (ActorSystem.this) {
-                        while (threadQueue.isEmpty() && isAlive) {
+                        while (isAlive) {
+                            actor = getRunnableActor();
+                            if (actor != null) {
+                                break;
+                            }
                             ActorSystem.this.wait();
                         }
 
                         if (!isAlive) {
                             return;
                         }
-
-                        try {
-                            id = threadQueue.removeFirst();
-                        } catch(NoSuchElementException e) {
-                            continue;
-                        }
-                    }
-
-                    Actor actor = actors.get(id);
-                    if (actor == null) {
-                        System.out.println("No actor for id " + id);
-                        continue;
                     }
 
                     actor.ProcessMessage();

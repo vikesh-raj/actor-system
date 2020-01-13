@@ -16,6 +16,10 @@ public abstract class Actor {
         return alive;
     }
 
+    synchronized boolean hasMessages() {
+        return !queue.isEmpty();
+    }
+
     public String getID() {
         return id;
     }
